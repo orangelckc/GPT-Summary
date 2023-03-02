@@ -2,7 +2,7 @@ import { summarize } from './summarize'
 
 const apiKey = ''
 
-const bvId = 'BV19M4y1d77m'
+const bvId = ''
 
 const summary = await summarize({ bvId, apiKey })
 

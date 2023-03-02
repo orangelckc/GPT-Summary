@@ -2,21 +2,32 @@ import axios from 'axios'
 import { OpenAIResult } from './OpenAIResult'
 import { getChunckedTranscripts, getSummaryPrompt } from './prompt'
 
-const run = async (bvId: string) => {
-  const requestUrl = `https://api.bilibili.com/x/player/v2?cid=281031471&bvid=${bvId}`
+const getBaseInfo = async (bvId: string) => {
+  // 可以获取到cid，和title
+  const requestUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvId}`
   const { data } = await axios.get(requestUrl)
+  return data
+}
 
+const getSubtitle = async (cid: string, bvId: string) => {
+  // 可以获取到字幕文件的链接
+  const requestUrl = `https://api.bilibili.com/x/player/v2?cid=${cid}&bvid=${bvId}`
+  const { data } = await axios.get(requestUrl)
   return data
 }
 
 export async function summarize(req: { bvId: string; apiKey: string }) {
   const { bvId, apiKey } = req
 
-  const res = await run(bvId)
+  const res = await getBaseInfo(bvId)
   if (!res)
     return
 
-  const subtitleList = res.data?.subtitle?.subtitles
+  const title = res.data?.title
+  const cid = res.data?.cid
+
+  const res2 = await getSubtitle(cid, bvId)
+  const subtitleList = res2.data?.subtitle?.subtitles
 
   if (!subtitleList || subtitleList?.length < 1) {
     console.error('No subtitle in the video: ', bvId)
@@ -38,12 +49,11 @@ export async function summarize(req: { bvId: string; apiKey: string }) {
       index,
     }
   })
-  // console.log('========transcripts========', transcripts)
-
+  // console.log('transcripts', transcripts.length)
   const text = getChunckedTranscripts(transcripts, transcripts)
-
-  const prompt = getSummaryPrompt('ChatGPT对中国用户开放了，以后再也不用科学上网了', text, true)
-
+  // console.log('text', text)
+  const prompt = getSummaryPrompt(title, text, true)
+  // console.log('prompt', prompt)
   try {
     const payload = {
       model: 'gpt-3.5-turbo',
