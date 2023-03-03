@@ -1,12 +1,26 @@
-export function getSummaryPrompt(title: string, transcript: any, hasNoTimestamp?: boolean) {
-  const betterPrompt = '我希望你是一名专业的视频内容编辑，帮我总结视频的内容精华。请你将视频字幕文本进行总结，然后以无序列表的方式返回，不要超过5条。记得不要重复句子，确保所有的句子都足够精简，清晰完整，祝你好运！'
-  const promptWithTimestamp = '我希望你是一名专业的视频内容编辑，帮我总结视频的内容精华。请先用一句简短的话总结视频梗概。然后再请你将视频字幕文本进行总结，在每句话的最前面加上开始的时间戳，然后以无序列表的方式返回。请注意不要超过5条哦，确保所有的句子都足够精简，清晰完整，祝你好运！'
-
+export function getSummaryPrompt(title: string, transcript: any) {
   return `标题: "${title
     .replace(/\n+/g, ' ')
     .trim()}"\n视频字幕: "${truncateTranscript(transcript)
       .replace(/\n+/g, ' ')
-      .trim()}"\n${hasNoTimestamp ? betterPrompt : promptWithTimestamp}`
+      .trim()}`
+}
+
+type CosplayType = 'summary' | 'robot'
+
+export function getCosplay(type: CosplayType, limit = 5) {
+  const summaryPrompt = `我希望你是一名专业的视频内容编辑，帮我总结视频的内容精华。请先用一句简短的话总结视频梗概。然后再请你将视频字幕文本进行总结，在每句话的最前面加上开始的时间戳，然后以无序列表的方式返回。请注意不要超过${limit}}条，确保所有的句子都足够精简，清晰完整，祝你好运！`
+
+  const robotPrompt = `我希望你是一个问答机器人，能够回答我提出的问题，请注意不要超过${limit}个字，确保所有的句子都足够精简，清晰完整，祝你好运！`
+
+  switch (type) {
+    case 'summary':
+      return summaryPrompt
+    case 'robot':
+      return robotPrompt
+    default:
+      return ''
+  }
 }
 
 // Seems like 15,000 bytes is the limit for the prompt

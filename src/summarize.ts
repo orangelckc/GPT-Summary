@@ -1,6 +1,7 @@
 import axios from 'axios'
+import pRetry from 'p-retry'
 import { OpenAIResult } from './OpenAIResult'
-import { getChunckedTranscripts, getSummaryPrompt } from './prompt'
+import { getChunckedTranscripts, getCosplay, getSummaryPrompt } from './prompt'
 
 const getBaseInfo = async (bvId: string) => {
   // 可以获取到cid，和title
@@ -12,13 +13,18 @@ const getBaseInfo = async (bvId: string) => {
 const getSubtitle = async (cid: string, bvId: string) => {
   // 可以获取到字幕文件的链接
   const requestUrl = `https://api.bilibili.com/x/player/v2?cid=${cid}&bvid=${bvId}`
-  const { data } = await axios.get(requestUrl)
-  return data
+  const { data: res } = await axios.get(requestUrl, {
+    headers: {
+      cookie: process.env.COOKIE,
+    },
+  })
+  const subtitleList = res.data?.subtitle?.subtitles
+  if (!subtitleList || subtitleList?.length < 1)
+    throw new Error(`No subtitle in the video: ${bvId}`)
+  return subtitleList
 }
 
-export async function summarize(req: { bvId: string; apiKey: string }) {
-  const { bvId, apiKey } = req
-
+export async function summarize(bvId: string) {
   const res = await getBaseInfo(bvId)
   if (!res)
     return
@@ -26,16 +32,17 @@ export async function summarize(req: { bvId: string; apiKey: string }) {
   const title = res.data?.title
   const cid = res.data?.cid
 
-  const res2 = await getSubtitle(cid, bvId)
-  const subtitleList = res2.data?.subtitle?.subtitles
-
-  if (!subtitleList || subtitleList?.length < 1) {
-    console.error('No subtitle in the video: ', bvId)
-    return
-  }
+  const subtitleList = await pRetry(() => getSubtitle(cid, bvId), {
+    onFailedAttempt: async (error) => {
+      console.warn(
+        `尝试第 ${error.attemptNumber} 次失败. 还有 ${error.retriesLeft} 次`,
+      )
+    },
+    retries: 2,
+  })
 
   const betterSubtitle
-    = subtitleList.find(({ lan }: { lan: string }) => lan === 'zh-CN')
+    = subtitleList.find(({ lan }: { lan: string }) => lan === 'zh-CN' || lan === 'ai-zh')
     || subtitleList[0]
 
   const subtitleUrl = betterSubtitle?.subtitle_url
@@ -52,22 +59,26 @@ export async function summarize(req: { bvId: string; apiKey: string }) {
   // console.log('transcripts', transcripts.length)
   const text = getChunckedTranscripts(transcripts, transcripts)
   // console.log('text', text)
-  const prompt = getSummaryPrompt(title, text, true)
+  const prompt = getSummaryPrompt(title, text)
   // console.log('prompt', prompt)
+  const cosplay = getCosplay('summary', 10)
+
   try {
     const payload = {
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user' as const, content: prompt }],
+      messages: [
+        { role: 'system' as const, content: cosplay },
+        { role: 'user' as const, content: prompt },
+      ],
       temperature: 0.5,
       top_p: 1,
       frequency_penalty: 0,
       presence_penalty: 0,
-      max_tokens: apiKey ? 400 : 300,
-      stream: false,
+      max_tokens: 400,
       n: 1,
     }
 
-    const result = await OpenAIResult(payload, apiKey)
+    const result = await OpenAIResult(payload)
 
     return result
   }
