@@ -1,6 +1,7 @@
 import axios from 'axios'
 import pRetry from 'p-retry'
 import { OpenAIResult } from './OpenAIResult'
+import type { CosplayType } from './prompt'
 import { getChunckedTranscripts, getCosplay, getSummaryPrompt } from './prompt'
 
 const getBaseInfo = async (bvId: string) => {
@@ -24,7 +25,7 @@ const getSubtitle = async (cid: string, bvId: string) => {
   return subtitleList
 }
 
-export async function summarize(bvId: string) {
+export async function summarize(bvId: string, type?: CosplayType, limit?: number) {
   const res = await getBaseInfo(bvId)
   if (!res)
     return
@@ -61,7 +62,7 @@ export async function summarize(bvId: string) {
   // console.log('text', text)
   const prompt = getSummaryPrompt(title, text)
   // console.log('prompt', prompt)
-  const cosplay = getCosplay('summary', 10)
+  const cosplay = getCosplay(type, limit)
 
   try {
     const payload = {
